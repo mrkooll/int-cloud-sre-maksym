@@ -56,43 +56,43 @@ against a known CA.
 #### Endpoints
 
 1. Get Replica Count of a Kubernetes Deployment
-  * **Endpoint**: `/deployments/{name}/replicas`
-  * **Method**: `GET`
-  * **URL Params**:
-    - `name`: Name of the Kubernetes Deployment
-  * **Response**:
-    - Success: HTTP 200
-        - `Content: { "name": "<deployment_name>", "replicaCount": <count> }`
-    - Error: HTTP 4xx/5xx (appropriate error status code)
-        - `Content: { "error": "<error_message>" }`
+    * **Endpoint**: `/deployments/{name}/replicas`
+	* **Method**: `GET`
+	* **URL Params**:
+		- `name`: Name of the Kubernetes Deployment
+	* **Response**:
+		- Success: HTTP 200
+			- `Content: { "name": "<deployment_name>", "replicaCount": <count> }`
+		- Error: HTTP 4xx/5xx (appropriate error status code)
+			- `Content: { "error": "<error_message>" }`
 2. Set Replica Count of a Kubernetes Deployment
-  * **Endpoint**: `/deployments/{name}/replicas`
-  * **Method**: `PUT`
-  * **URL Params**:
-    - `name`: Name of the Kubernetes Deployment
-  * **Request Body**:
-    - `Content: { "replicaCount": <new_count> }`
-  * **Response**:
-    - Success: HTTP 200
-      - `Content: { "message": "Replica count updated successfully." }`
-    - Error: HTTP 4xx/5xx (appropriate error status code)
-      - `Content: { "error": "<error_message>" }`
+    * **Endpoint**: `/deployments/{name}/replicas`
+	* **Method**: `PUT`
+	* **URL Params**:
+		- `name`: Name of the Kubernetes Deployment
+	* **Request Body**:
+		- `Content: { "replicaCount": <new_count> }`
+	* **Response**:
+		- Success: HTTP 200
+			- `Content: { "message": "Replica count updated successfully." }`
+		- Error: HTTP 4xx/5xx (appropriate error status code)
+			- `Content: { "error": "<error_message>" }`
 3. List Available Kubernetes Deployments
-  * **Endpoint**: `/deployments`
-  * **Method**: `GET`
-  * **Response**:
-    - Success: HTTP 200
-      - `Content: [{ "name": "<deployment_name>", "replicaCount": <count> }, ...]`
-    - Error: HTTP 4xx/5xx (appropriate error status code)
-      - `Content: { "error": "<error_message>" }`
+    * **Endpoint**: `/deployments`
+	* **Method**: `GET`
+	* **Response**:
+		- Success: HTTP 200
+			- `Content: [{ "name": "<deployment_name>", "replicaCount": <count> }, ...]`
+		- Error: HTTP 4xx/5xx (appropriate error status code)
+			- `Content: { "error": "<error_message>" }`
 4. Health Check
-  * **Endpoint**: `/health`
-  * **Method**: `GET`
-  * **Response**:
-    - Success: HTTP 200
-      - `Content: { "status": "healthy", "kubernetes": "connected" }`
-    - Error: HTTP 4xx/5xx (appropriate error status code)
-      - `Content: { "status": "unhealthy", "error": "<error_message>" }`
+    * **Endpoint**: `/health`
+	* **Method**: `GET`
+	* **Response**:
+		- Success: HTTP 200
+			- `Content: { "status": "healthy", "kubernetes": "connected" }`
+		- Error: HTTP 4xx/5xx (appropriate error status code)
+			- `Content: { "status": "unhealthy", "error": "<error_message>" }`
 
 #### Error Handling
 
