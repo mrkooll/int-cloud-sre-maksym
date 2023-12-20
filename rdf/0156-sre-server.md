@@ -30,10 +30,83 @@ performance and security are addressed.
   Informers to monitor and cache changes in Deployment
   resources. Informers provide an event-based mechanism to react to
   changes in Kubernetes objects, thus reducing the need for frequent
-  API calls and improving performance. 
+  API calls and improving performance.
 * **mTLS for Secure Communication**: Establish mutual TLS (mTLS) for
   secure and authenticated communication between the server and
   clients.
+
+### API Specification
+
+#### Base URL
+
+The base URL for the API will be:
+```
+https://<server-address>:<port>/api/v1
+```
+
+**Note**: The actual server address and port will be provided in the
+service deployment documentation.
+
+#### Authentication
+
+All API requests must be authenticated using mTLS. Clients must
+present a valid client certificate that the server will authenticate
+against a known CA.
+
+#### Endpoints
+
+1. Get Replica Count of a Kubernetes Deployment
+  * **Endpoint**: `/deployments/{name}/replicas`
+  * **Method**: `GET`
+  * **URL Params**:
+    - `name`: Name of the Kubernetes Deployment
+  * **Response**:
+    - Success: HTTP 200
+        - `Content: { "name": "<deployment_name>", "replicaCount": <count> }`
+    - Error: HTTP 4xx/5xx (appropriate error status code)
+        - `Content: { "error": "<error_message>" }`
+2. Set Replica Count of a Kubernetes Deployment
+  * **Endpoint**: `/deployments/{name}/replicas`
+  * **Method**: `PUT`
+  * **URL Params**:
+    - `name`: Name of the Kubernetes Deployment
+  * **Request Body**:
+    - `Content: { "replicaCount": <new_count> }`
+  * **Response**:
+    - Success: HTTP 200
+      - `Content: { "message": "Replica count updated successfully." }`
+    - Error: HTTP 4xx/5xx (appropriate error status code)
+      - `Content: { "error": "<error_message>" }`
+3. List Available Kubernetes Deployments
+  * **Endpoint**: `/deployments`
+  * **Method**: `GET`
+  * **Response**:
+    - Success: HTTP 200
+      - `Content: [{ "name": "<deployment_name>", "replicaCount": <count> }, ...]`
+    - Error: HTTP 4xx/5xx (appropriate error status code)
+      - `Content: { "error": "<error_message>" }`
+4. Health Check
+  * **Endpoint**: `/health`
+  * **Method**: `GET`
+  * **Response**:
+    - Success: HTTP 200
+      - `Content: { "status": "healthy", "kubernetes": "connected" }`
+    - Error: HTTP 4xx/5xx (appropriate error status code)
+      - `Content: { "status": "unhealthy", "error": "<error_message>" }`
+
+#### Error Handling
+
+All endpoints should return meaningful HTTP status codes and error
+messages in case of failures, including but not limited to invalid
+requests, authentication errors, and internal server errors.
+
+#### Security and Data Integrity
+
+* All data exchanged with the API is encrypted using TLS.
+* mTLS is used for client authentication to ensure that only
+  authorized clients can access the API.
+* Input validation is performed on all incoming requests to prevent
+  common web vulnerabilities.
 
 ### Automation
 
