@@ -37,8 +37,26 @@ performance and security are addressed.
 
 ### Automation
 
-* **Make-based Workflow**: Use `make` for building, testing, and
+* **Make-based Workflow**: `make` is used for building, testing, and
   deploying the server, ensuring consistent and automated processes.
+
+* **Make-based Workflow**: The use of make streamlines the process of
+  building, testing, and deploying the server. It ensures that these
+  processes are consistent, repeatable, and can be automated. The
+  Makefile includes targets for various tasks including building the
+  binary, running tests, and packaging the application.
+* **Deployment Using Helm Chart**: For deployment, we utilize Helm, a
+  Kubernetes package manager, to manage and deploy our application. A
+  Helm chart is created for the application, which encapsulates all
+  Kubernetes resources needed for deployment, such as Deployments,
+  Services, and any required resources. This approach allows for
+  easier management of application releases and configuration
+  changes. The make process includes a target for deploying the
+  application using this Helm chart, providing a simplified and
+  consistent deployment process. With Helm, we can also manage
+  different deployment configurations for various environments like
+  development, staging, and production, offering greater flexibility
+  and control.
 
 ### Security
 
@@ -103,49 +121,63 @@ for client-server communication. The planned enhancements aim to
 further strengthen the security and scalability of our mTLS setup,
 aligning with best practices in cloud-native environments.
 
-#### Informer Security Considerations
+### Informer Security Considerations
 
-In the initial version of our implementation, the security setup for
-Kubernetes Informers is kept basic:
+Given the inherently restricted access in Kubernetes, our
+implementation of Kubernetes Informers incorporates necessary security
+configurations from the outset:
+* **Role-Based Access Control (RBAC)**: We utilize RBAC to define and
+  limit the permissions of the ServiceAccount used by the
+  Informer. This includes creating specific Roles and RoleBindings
+  that grant precisely the required privileges for the Informer's
+  operations. This setup is crucial to ensure that the Informer has
+  access to the resources it needs to monitor, while also adhering to
+  the principle of least privilege.
+* **ServiceAccount Configuration**: A dedicated ServiceAccount is
+  created for the Informer. This ServiceAccount is configured with the
+  minimum necessary permissions, which are defined by the associated
+  Roles and RoleBindings. This approach ensures that the Informer
+  operates with a security-focused setup.
+* **Namespace Considerations**: While the Informer requires access
+  across different namespaces to monitor all deployments, its own
+  operational resources (like its own Deployment and Service) are
+  contained within a specific namespace. This helps in isolating the
+  Informer’s control plane, minimizing its footprint and impact on
+  other cluster resources.
+* **Deployment and Service Setup**: The Informer is deployed as a
+  Kubernetes Deployment with an associated Service. This configuration
+  allows for scalable and manageable operations within the cluster,
+  ensuring that the Informer is resilient and maintains high
+  availability.
 
-1. **Unrestricted Access**: The Informer operates without specific access
-   restrictions. It uses a ServiceAccount that is not bound by any
-   Role or RoleBinding, allowing it to access a wide range of
-   resources within the Kubernetes cluster.
-2. **Basic Service Account Setup**: A standard ServiceAccount is created
-   and utilized by the Informer. This account does not yet include
-   advanced security configurations but provides the necessary
-   privileges for the Informer to function effectively.
+#### Current Security Setup
 
-This approach allows for initial testing and setup without the
-complexity of detailed access controls. However, it's important to
-note that this unrestricted access poses potential security risks, as
-the Informer has broad permissions across the cluster.
+In the current version, the Informer's setup reflects these security
+considerations:
+* The Informer is configured with a role that grants read access to
+  necessary resources across all namespaces.
+* A ServiceAccount tied to this role is used by the Informer, ensuring
+  that it operates with the appropriate permissions.
+* The Informer's deployment and associated service are configured
+  within a specific namespace, providing operational isolation.
 
-##### Planned Future Enhancements
+#### Planned Future Enhancements
 
-In the next version, we plan to significantly enhance the security
-posture of the Informer with the following additions:
+In future versions, we plan to further enhance the security and
+functionality of the Informer:
+* **Advanced RBAC Configuration**: We will continuously review and
+  refine the RBAC setup to align with evolving best practices in
+  Kubernetes security and the changing needs of the Informer.
+* **Enhanced Secrets Management**: Implementation of more robust
+  handling of sensitive data, including improved management of
+  Kubernetes Secrets, will be a priority. This will enhance the
+  security around sensitive information accessed and utilized by the
+  Informer.
 
-1. **Role-Based Access Control (RBAC)**: We will introduce RBAC to
-   precisely define and limit the permissions of the ServiceAccount
-   used by the Informer. This includes creating specific Roles and
-   RoleBindings that grant only the necessary privileges required for
-   the Informer's operations.
-2. **Dedicated Namespace**: The Informer will operate within its own
-   Namespace, isolating its activities and reducing the potential
-   impact on other cluster resources.
-3. **Secrets Management**: We will implement more robust handling of
-   sensitive data, including managing Kubernetes Secrets. This ensures
-   that sensitive information is accessed and utilized securely by the
-   Informer, with proper controls to prevent unauthorized access or
-   exposure.
-
-By progressively enhancing the security framework around the Informer,
-we aim to strike a balance between functional testing in the initial
-phase and robust, secure operations in the subsequent version. This
-phased approach allows us to ensure that the Informer operates
-effectively while adhering to best practices in Kubernetes security.
+By adopting these security measures from the initial phase, we ensure
+that the Informer operates securely and effectively, adhering to
+Kubernetes security best practices. This approach also sets a solid
+foundation for future enhancements and scaling.
 
 ### UX
 
@@ -229,14 +261,10 @@ requests, authentication errors, and internal server errors.
 In the next version of our application, we plan to evolve our API
 by:
 
-* Add rate limiting and throttling mechanisms to protest service from
+* Add rate limiting and throttling mechanisms to protect service from
   abuse.
-* Add more methods to update deployment parameters like updating image
-  version.
-
-* **Configuration Management**: Discuss how these changes impact
-  existing setups and the upgrade path.
-
+* Add more methods to update deployment parameters like adjusting
+  image version.
 
 ### Proto Specification
 
@@ -340,7 +368,7 @@ test frameworks.
 	- We will implement unit tests using the Gocheck framework, which
       provides more powerful testing capabilities for Go applications.
     - These tests will cover a broader range of scenarios and include
-      more detailed assertions to validate the internal workings of
+      more detailed assertions to validate the internal work of
       our application.
     - Unit Testing Kubernetes Informers: Tests will be designed to
       simulate various Kubernetes events and assess the Informer's
@@ -352,7 +380,7 @@ test frameworks.
       certificate issues.
 * Automated Test Execution:
 	- The Gocheck tests will be integrated into our CI/CD pipeline,
-      allowing for automated execution of tests upon each code commit
+      allowing for automated tests execution upon each code commit
       or pull request.
 	- This automation ensures consistent testing and helps in
       identifying issues early in the development cycle.
