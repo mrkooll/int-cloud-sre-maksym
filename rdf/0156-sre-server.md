@@ -354,6 +354,9 @@ Kubernetes Informers and mTLS are working as expected.
       ensure that Informer activities and mTLS processes are logged as
       expected. This includes checking for proper logging of both
       successful operations and any errors or warnings.
+* **Unit Test**:
+	- We will use Go testing package to write base using test for
+      procedures.
 
 #### Planned Enhancements for the Next Version
 
@@ -361,9 +364,9 @@ As we progress to the next version, our testing strategy will become
 more sophisticated with the integration of unit testing and automated
 test frameworks.
 
-* Integration of Gocheck Framework for Golang Unit Tests:
-	- We will implement unit tests using the Gocheck framework, which
-      provides more powerful testing capabilities for Go applications.
+* Integration of Go Testing for Golang Unit Tests:
+	- We will implement unit tests using the testing framework, which
+      provides powerful testing capabilities for Go applications.
     - These tests will cover a broader range of scenarios and include
       more detailed assertions to validate the internal work of
       our application.
