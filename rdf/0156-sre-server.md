@@ -170,19 +170,21 @@ against a known CA.
 #### Endpoints
 
 1. Get Replica Count of a Kubernetes Deployment
-    * **Endpoint**: `/deployments/{name}/replicas`
+    * **Endpoint**: `/namespaces/{namespace}/deployments/{name}/replicas`
 	* **Method**: `GET`
 	* **URL Params**:
+		- `namespace`: Namespace of the Kubernetes Deployment
 		- `name`: Name of the Kubernetes Deployment
 	* **Response**:
 		- Success: HTTP 200
-			- `Content: { "name": "<deployment_name>", "replicaCount": <count> }`
+			- `Content: { "namespace": "<namespace_name>", "name": "<deployment_name>", "replicaCount": <count> }`
 		- Error: HTTP 4xx/5xx (appropriate error status code)
 			- `Content: { "error": "<error_message>" }`
 2. Set Replica Count of a Kubernetes Deployment
-    * **Endpoint**: `/deployments/{name}/replicas`
+    * **Endpoint**: `/namespaces/{namespace}/deployments/{name}/replicas`
 	* **Method**: `PUT`
 	* **URL Params**:
+		- `namespace`: Namespace of the Kubernetes Deployment
 		- `name`: Name of the Kubernetes Deployment
 	* **Request Body**:
 		- `Content: { "replicaCount": <new_count> }`
@@ -196,10 +198,10 @@ against a known CA.
 	* **Method**: `GET`
 	* **Response**:
 		- Success: HTTP 200
-			- `Content: [{ "name": "<deployment_name>", "replicaCount": <count> }, ...]`
+			- `Content: [{ "namespace": "<namespace>", "name": "<deployment_name>", "replicaCount": <count> }, ...]`
 		- Error: HTTP 4xx/5xx (appropriate error status code)
 			- `Content: { "error": "<error_message>" }`
-4. Health Check
+4. Service Health Check
     * **Endpoint**: `/health`
 	* **Method**: `GET`
 	* **Response**:
