@@ -37,9 +37,6 @@ performance and security are addressed.
 
 ### Automation
 
-* **Make-based Workflow**: `make` is used for building, testing, and
-  deploying the server, ensuring consistent and automated processes.
-
 * **Make-based Workflow**: The use of make streamlines the process of
   building, testing, and deploying the server. It ensures that these
   processes are consistent, repeatable, and can be automated. The
