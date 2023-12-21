@@ -355,8 +355,15 @@ Kubernetes Informers and mTLS are working as expected.
       expected. This includes checking for proper logging of both
       successful operations and any errors or warnings.
 * **Unit Test**:
-	- We will use Go testing package to write base using test for
-      procedures.
+	- We will leverage Go's built-in testing package to develop unit
+      tests, focusing on the core functionalities of our application's
+      functions. This approach will ensure thorough validation of our
+      codebase, enabling us to efficiently identify and address
+      issues. The tests will cover both expected and edge-case
+      scenarios, thereby enhancing the reliability and robustness of
+      our application. This strategy aligns with best practices in
+      software development, ensuring maintainable and high-quality
+      code.
 
 #### Planned Enhancements for the Next Version
 
@@ -364,9 +371,7 @@ As we progress to the next version, our testing strategy will become
 more sophisticated with the integration of unit testing and automated
 test frameworks.
 
-* Integration of Go Testing for Golang Unit Tests:
-	- We will implement unit tests using the testing framework, which
-      provides powerful testing capabilities for Go applications.
+* Unit Tests improvements:
     - These tests will cover a broader range of scenarios and include
       more detailed assertions to validate the internal work of
       our application.
