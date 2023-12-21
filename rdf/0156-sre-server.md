@@ -224,8 +224,19 @@ requests, authentication errors, and internal server errors.
 * Input validation is performed on all incoming requests to prevent
   common web vulnerabilities.
 
+#### Planned Future Enhancements
+
+In the next version of our application, we plan to evolve our API
+by:
+
+* Add rate limiting and throttling mechanisms to protest service from
+  abuse.
+* Add more methods to update deployment parameters like updating image
+  version.
+
 * **Configuration Management**: Discuss how these changes impact
   existing setups and the upgrade path.
+
 
 ### Proto Specification
 
