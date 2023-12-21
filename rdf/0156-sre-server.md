@@ -3,7 +3,7 @@ authors: Maksym Tiurin (maksym@tiurin.name)
 state: draft
 ---
 
-# RFD 156 - Enhancing Kubernetes Interaction in Go Server for SRE Level 4
+# RFD 156 - Replica Count Management Server
 
 ## What
 
