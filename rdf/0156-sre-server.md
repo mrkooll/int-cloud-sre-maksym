@@ -231,7 +231,7 @@ against a known CA.
 		- Error: HTTP 4xx/5xx (appropriate error status code)
 			- `Content: { "error": "<error_message>" }`
 4. Service Health Check
-    * **Endpoint**: `/health`
+    * **Endpoint**: `/healthz`
 	* **Method**: `GET`
 	* **Response**:
 		- Success: HTTP 200
