@@ -80,9 +80,9 @@ for mTLS:
   entities.
 * **Use of Self-Signed CA**: In this initial version, we are utilizing
   a self-signed CA for simplicity and ease of setup. This approach is
-  adequate for internal, development, or testing
-  environments. However, for production environments, it is
-  recommended to use certificates issued by a trusted CA.
+  adequate for internal, development, testing and production
+  environments. Since this service will not be public for external
+  customers Self-Signed CA is good for any deployment's type.
 * **Enforcing TLS 1.3**: To ensure that we do not use insecure or
   outdated protocols, the server is configured to only support TLS
   1.3, the latest version of the TLS protocol. This is achieved by
@@ -238,6 +238,14 @@ against a known CA.
 			- `Content: { "status": "healthy", "kubernetes": "connected" }`
 		- Error: HTTP 4xx/5xx (appropriate error status code)
 			- `Content: { "status": "unhealthy", "error": "<error_message>" }`
+5. Service Liveness Check
+   * **Endpoint**: `/pingz`
+   * **Method**: `GET`
+   * **Response**:
+		- Success: HTTP 200
+			- `Content: { "status": "alive" }`
+		- Error: Liveness check is failed when service is dead or
+              stuck, so there is no response content from the service API.
 
 #### Error Handling
 
@@ -384,7 +392,7 @@ test frameworks.
       validation, client authentication, and error handling in case of
       certificate issues.
 * Automated Test Execution:
-	- The Gocheck tests will be integrated into our CI/CD pipeline,
+	- The unit tests will be integrated into our CI/CD pipeline,
       allowing for automated tests execution upon each code commit
       or pull request.
 	- This automation ensures consistent testing and helps in
