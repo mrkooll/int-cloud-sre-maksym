@@ -219,7 +219,7 @@ against a known CA.
 		- `Content: { "replicaCount": <new_count> }`
 	* **Response**:
 		- Success: HTTP 200
-			- `Content: { "message": "Replica count updated successfully." }`
+			- `Content: { "namespace": "<namespace_name>", "name": "<deployment_name>", "replicaCount": <count> }`
 		- Error: HTTP 4xx/5xx (appropriate error status code)
 			- `Content: { "error": "<error_message>" }`
 3. List Available Kubernetes Deployments
