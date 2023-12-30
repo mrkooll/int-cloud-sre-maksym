@@ -85,7 +85,10 @@ func run(args []string) error {
 				log.Println("object is not a deployment")
 				return
 			}
-			log.Printf("deployment added: %s/%s (replicas: %d)\n", deployment.Namespace, deployment.Name, deployment.Status.Replicas)
+			log.Printf("deployment added: %s/%s (replicas: %d)\n",
+				deployment.Namespace,
+				deployment.Name,
+				deployment.Status.Replicas)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			// deployment := newObj.(*metav1.PartialObjectMetadata)
@@ -95,7 +98,10 @@ func run(args []string) error {
 				log.Println("Object is not a Deployment")
 				return
 			}
-			log.Printf("Deployment updated: %s/%s (replicas: %d)\n", deployment.Namespace, deployment.Name, deployment.Status.Replicas)
+			log.Printf("Deployment updated: %s/%s (replicas: %d)\n",
+				deployment.Namespace,
+				deployment.Name,
+				deployment.Status.Replicas)
 		},
 		DeleteFunc: func(obj interface{}) {
 			// deployment := obj.(*metav1.PartialObjectMetadata)
@@ -105,7 +111,9 @@ func run(args []string) error {
 				log.Println("Object is not a Deployment")
 				return
 			}
-			log.Printf("Deployment deleted: %s/%s\n", deployment.Namespace, deployment.Name)
+			log.Printf("Deployment deleted: %s/%s\n",
+				deployment.Namespace,
+				deployment.Name)
 		},
 	})
 
@@ -120,7 +128,8 @@ func run(args []string) error {
 	// add router
 	router := mux.NewRouter()
 	// add handlers
-	router.Handle("/v1/namespaces/{namespace}/deployments/{name}/replicas", &deploymentHandler{clientset: clientset, lister: deploymentLister})
+	router.Handle("/v1/namespaces/{namespace}/deployments/{name}/replicas",
+		&deploymentHandler{clientset: clientset, lister: deploymentLister})
 	router.Handle("/v1/deployments", &deploymentsHandler{lister: deploymentLister})
 	router.Handle("/v1/healthz", &healthzHandler{clientset: clientset, informer: deploymentInformer})
 	router.Handle("/v1/pingz", &pingzHandler{})
