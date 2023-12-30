@@ -2,25 +2,20 @@ package main
 
 import (
 	"context"
-	//	"crypto/tls"
 	"encoding/json"
 	"flag"
-
-	// "fmt"
-	//"errors"
-	"github.com/gorilla/mux"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/gorilla/mux"
 	appsv1 "k8s.io/api/apps/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-
-	// "k8s.io/apimachinery/pkg/labels"
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	listersv1 "k8s.io/client-go/listers/apps/v1"
@@ -87,10 +82,10 @@ func run(args []string) error {
 			deployment, ok := obj.(*appsv1.Deployment)
 			if !ok {
 				// Handle the error appropriately
-				log.Println("Object is not a Deployment")
+				log.Println("object is not a deployment")
 				return
 			}
-			log.Printf("Deployment added: %s/%s (replicas: %d)\n", deployment.Namespace, deployment.Name, deployment.Status.Replicas)
+			log.Printf("deployment added: %s/%s (replicas: %d)\n", deployment.Namespace, deployment.Name, deployment.Status.Replicas)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			// deployment := newObj.(*metav1.PartialObjectMetadata)
@@ -139,103 +134,97 @@ type deploymentHandler struct {
 	lister    listersv1.DeploymentLister
 }
 
+func writeMessage(w http.ResponseWriter, statusCode int, data any) {
+	d, _ := json.Marshal(data)
+	w.WriteHeader(statusCode)
+	_, err := w.Write(d)
+	if err != nil {
+		log.Printf("unable to write response: %v", err)
+	}
+}
+
+func writeError(w http.ResponseWriter, statusCode int, txt string) {
+	d := ErrorMessage{Error: txt}
+	writeMessage(w, statusCode, d)
+}
+
 // ServeHTTP implements http.Handler
 func (h *deploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	namespace := vars["namespace"]
 	name := vars["name"]
-	result := Deployment{}
-	errorResult := ErrorMessage{}
-	hasError := false
 
 	// check is deployment exist
-	deployment, err := h.lister.Deployments(namespace).Get(name)
+	deploymentSpec, err := h.lister.Deployments(namespace).Get(name)
+
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
-			errorResult.Error = "Deployment " + name + " in namespace " + namespace + "does not exist"
-			w.WriteHeader(http.StatusNotFound)
-
+			writeError(w, http.StatusNotFound, fmt.Sprintf("Deployment %s in namespace %s does not exist", name, namespace))
 		} else {
-			errorResult.Error = "Error while fetching deployment:" + err.Error()
-			w.WriteHeader(http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Error while fetching deployment: %v", err))
 		}
-		hasError = true
+		return
 	}
 
 	switch r.Method {
 	case "GET":
 		// Handle GET request
-		if !hasError {
-			result.Name = name
-			result.Namespace = namespace
-			result.ReplicaCount = *deployment.Spec.Replicas
-		}
+		writeMessage(w, http.StatusOK, &Deployment{
+			Namespace:    deploymentSpec.Namespace,
+			Name:         deploymentSpec.Name,
+			ReplicaCount: deploymentSpec.Status.Replicas})
+		return
+
 	case "PUT":
 		// Handle PUT request
 		// request body spec
 		type ReplicaCountSpec struct {
-			ReplicaCount int `json:"replicaCount"`
+			ReplicaCount int32 `json:"replicaCount"`
 		}
-		if !hasError {
-			// get replica count
-			// var spec ReplicaCountSpec
-			spec := ReplicaCountSpec{ReplicaCount: -1}
-			err := json.NewDecoder(r.Body).Decode(&spec)
-			defer r.Body.Close()
-			if err != nil || spec.ReplicaCount == -1 {
-				// bad data type in json or data that doesn't math the spec
-				hasError = true
-				if err != nil {
-					errorResult.Error = "Unable to decode request body " + err.Error()
-				} else {
-					errorResult.Error = "Unable to decode request body"
-				}
-				w.WriteHeader(http.StatusBadRequest)
-			} else {
-				result.Name = name
-				result.Namespace = namespace
-				result.ReplicaCount = int32(spec.ReplicaCount)
 
-				// fetch the deployment
-				deploymentClient := h.clientset.AppsV1().Deployments(result.Namespace)
-				deployment, err := deploymentClient.Get(context.TODO(), result.Name, metav1.GetOptions{})
-				if err != nil {
-					hasError = true
-					errorResult.Error = "Error while fetching deployment:" + err.Error()
-					w.WriteHeader(http.StatusInternalServerError)
-				} else {
-					// set replica count
-					replicaCount := result.ReplicaCount
-					deployment.Spec.Replicas = &replicaCount
-					// update the deployment
-					_, err = deploymentClient.Update(context.TODO(), deployment, metav1.UpdateOptions{})
-					if err != nil {
-						hasError = true
-						errorResult.Error = "Error while updating deployment:" + err.Error()
-						w.WriteHeader(http.StatusInternalServerError)
-					}
-				}
+		// get replica count
+		// var spec ReplicaCountSpec
+		spec := ReplicaCountSpec{ReplicaCount: -1}
+		err := json.NewDecoder(r.Body).Decode(&spec)
+		defer r.Body.Close()
+
+		if err != nil {
+			// bad data type in json or data that doesn't math the spec
+			errTxt := "unable to decode request body"
+			if err != nil {
+				errTxt += errTxt + " " + err.Error()
 			}
+			writeError(w, http.StatusBadRequest, errTxt)
+			return
 		}
+
+		if spec.ReplicaCount < 0 {
+			writeError(w, http.StatusBadRequest, "missing or invalid replicaCount")
+			return
+		}
+
+		// fetch the deployment
+		deploymentClient := h.clientset.AppsV1().Deployments(namespace)
+
+		deployment, err := deploymentClient.Get(r.Context(), name, metav1.GetOptions{})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "error while fetching deployment: "+err.Error())
+			return
+		}
+		// set replica count
+		deployment.Spec.Replicas = &spec.ReplicaCount
+		// update the deployment
+		_, err = deploymentClient.Update(r.Context(), deployment, metav1.UpdateOptions{})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Error while updating deployment: "+err.Error())
+		}
+		writeMessage(w, http.StatusOK, &Deployment{
+			Namespace:    deploymentSpec.Namespace,
+			Name:         deploymentSpec.Name,
+			ReplicaCount: spec.ReplicaCount})
+
 	default:
-		errorResult.Error = "Method not allowed"
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		hasError = true
-	}
-	if hasError {
-		jsonData, er := json.Marshal(errorResult)
-		if er != nil {
-			log.Fatalf("Error occurred during marshaling. Error: %s", er.Error())
-		}
-		w.Write([]byte(jsonData))
-	} else {
-		// everything ok
-		w.WriteHeader(http.StatusOK)
-		jsonData, er := json.Marshal(result)
-		if er != nil {
-			log.Fatalf("Error occurred during marshaling. Error: %s", er.Error())
-		}
-		w.Write([]byte(jsonData))
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	}
 }
 
@@ -249,25 +238,18 @@ func (h *deploymentsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// List all deployments in all namespaces
 	deployments, err := h.lister.Deployments(metav1.NamespaceAll).List(labels.Everything())
 	if err != nil {
-		errorMsg := ErrorMessage{Error: err.Error()}
-		jsonData, er := json.Marshal(errorMsg)
-		if er != nil {
-			log.Fatalf("Error occurred during marshaling. Error: %s", er.Error())
-		}
-		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte(jsonData))
+		writeError(w, http.StatusInternalServerError, "Error while fetching deployments: "+err.Error())
 	} else {
-		result := []Deployment{}
+		result := make([]*Deployment, 0, len(deployments))
 		// Iterate over the deployments
 		for _, deployment := range deployments {
-			result = append(result, Deployment{Namespace: deployment.Namespace, Name: deployment.Name, ReplicaCount: deployment.Status.Replicas})
+			result = append(result, &Deployment{
+				Namespace:    deployment.Namespace,
+				Name:         deployment.Name,
+				ReplicaCount: deployment.Status.Replicas,
+			})
 		}
-		jsonData, er := json.Marshal(result)
-		if er != nil {
-			log.Fatalf("Error occurred during marshaling. Error: %s", er.Error())
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(jsonData))
+		writeMessage(w, http.StatusOK, result)
 	}
 }
 
@@ -277,48 +259,39 @@ type healthzHandler struct {
 	informer  cache.SharedIndexInformer
 }
 
+// Return healthy status
+// represents a healthy message
+type HealthyStatus struct {
+	Status     string `json:"status"`
+	Kubernetes string `json:"kubernetes"`
+}
+
+// represents an unhealthy message
+type UnhealthyStatus struct {
+	Status string `json:"status"`
+	Error  string `json:"error"`
+}
+
 // ServeHTTP implements http.Handler
 func (h *healthzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	healthy := true
-	errorMsg := ""
 	if h.informer.HasSynced() {
 		_, err := h.clientset.CoreV1().Pods("").List(r.Context(), metav1.ListOptions{Limit: 1})
-		if err == nil {
-			// Return healthy status
-			// represents a healthy message
-			type HealthyMessage struct {
-				Status     string `json:"status"`
-				Kubernetes string `json:"kubernetes"`
-			}
-			status := HealthyMessage{Status: "healthy", Kubernetes: "connected"}
-			jsonData, err := json.Marshal(status)
-			if err != nil {
-				log.Fatalf("Error occurred during marshaling. Error: %s", err.Error())
-			}
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(jsonData))
-		} else {
-			healthy = false
-			errorMsg = "Unable to connect to the cluster: " + err.Error()
-		}
-	} else {
-		healthy = false
-		errorMsg = "Informer lost synchronization with the cluster"
-	}
-	if !healthy {
-		// Return error status
-		// represents a unhealthy message
-		type UnHealthyMessage struct {
-			Status string `json:"status"`
-			Error  string `json:"error"`
-		}
-		status := UnHealthyMessage{Status: "unhealthy", Error: errorMsg}
-		jsonData, err := json.Marshal(status)
 		if err != nil {
-			log.Fatalf("Error occurred during marshaling. Error: %s", err.Error())
+			status := UnhealthyStatus{
+				Status: "unhealthy",
+				Error:  "unable to connect to the cluster: " + err.Error(),
+			}
+			writeMessage(w, http.StatusServiceUnavailable, status)
+			return
 		}
-		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte(jsonData))
+		status := HealthyStatus{Status: "healthy", Kubernetes: "connected"}
+		writeMessage(w, http.StatusOK, status)
+	} else {
+		// Return unhealthy status
+		status := UnhealthyStatus{
+			Status: "unhealthy",
+			Error:  "cluster informer is not synced yet"}
+		writeMessage(w, http.StatusServiceUnavailable, status)
 	}
 }
 
@@ -329,10 +302,5 @@ func (h *pingzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Status string `json:"status"`
 	}
 	status := pingOk{Status: "alive"}
-	jsonData, err := json.Marshal(status)
-	if err != nil {
-		log.Fatalf("Error occurred during marshaling. Error: %s", err.Error())
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(jsonData))
+	writeMessage(w, http.StatusOK, status)
 }
