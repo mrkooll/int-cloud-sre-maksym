@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,7 +14,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	appsv1 "k8s.io/api/apps/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -38,7 +39,7 @@ type ErrorMessage struct {
 func main() {
 	err := run(os.Args)
 	if err != nil {
-		log.Printf("Error: %v", err)
+		log.Fatalf("Error: %v", err)
 	}
 }
 
@@ -49,9 +50,35 @@ func run(args []string) error {
 	}
 
 	var port, kubeconfig string
+	var cert, key, cacert string
 	flag.StringVar(&port, "port", "8080", "server port")
 	flag.StringVar(&kubeconfig, "kubeconfig", filepath.Join(homedir, ".kube", "config"), "path to the kubeconfig file")
+	flag.StringVar(&cert, "cert", "/etc/certs/sre-server.crt", "certificate file")
+	flag.StringVar(&key, "key", "/etc/certs/sre-server.key", "certificate key file")
+	flag.StringVar(&cacert, "cacert", "/etc/certs/sre-bundle.crt", "CA certificates file")
 	flag.Parse()
+
+	// Load server's certificate and private key
+	serverCert, err := tls.LoadX509KeyPair(cert, key)
+	if err != nil {
+		return err
+	}
+
+	// Load CA certificate
+	caCert, err := os.ReadFile(cacert)
+	if err != nil {
+		return err
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	// Create TLS Config
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		ClientCAs:    caCertPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		MinVersion:   tls.VersionTLS13,
+	}
 
 	// use the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
@@ -75,48 +102,6 @@ func run(args []string) error {
 	// create a deployment lister for all namespaces
 	deploymentLister := sharedInformers.Apps().V1().Deployments().Lister()
 
-	// Add an event handler to print deployment details when they change
-	deploymentInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			// deployment := obj.(*metav1.PartialObjectMetadata)
-			deployment, ok := obj.(*appsv1.Deployment)
-			if !ok {
-				// Handle the error appropriately
-				log.Println("object is not a deployment")
-				return
-			}
-			log.Printf("deployment added: %s/%s (replicas: %d)\n",
-				deployment.Namespace,
-				deployment.Name,
-				deployment.Status.Replicas)
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			// deployment := newObj.(*metav1.PartialObjectMetadata)
-			deployment, ok := newObj.(*appsv1.Deployment)
-			if !ok {
-				// Handle the error appropriately
-				log.Println("Object is not a Deployment")
-				return
-			}
-			log.Printf("Deployment updated: %s/%s (replicas: %d)\n",
-				deployment.Namespace,
-				deployment.Name,
-				deployment.Status.Replicas)
-		},
-		DeleteFunc: func(obj interface{}) {
-			// deployment := obj.(*metav1.PartialObjectMetadata)
-			deployment, ok := obj.(*appsv1.Deployment)
-			if !ok {
-				// Handle the error appropriately
-				log.Println("Object is not a Deployment")
-				return
-			}
-			log.Printf("Deployment deleted: %s/%s\n",
-				deployment.Namespace,
-				deployment.Name)
-		},
-	})
-
 	// Start the informer factory to begin watching for changes
 	// we run the informer for the lifetime of the application
 	sharedInformers.Start(context.Background().Done())
@@ -125,16 +110,25 @@ func run(args []string) error {
 	if !cache.WaitForCacheSync(context.Background().Done(), deploymentInformer.HasSynced) {
 		log.Panicln("Timed out waiting for caches to sync")
 	}
+	log.Println("Informer is started")
 	// add router
 	router := mux.NewRouter()
 	// add handlers
-	router.Handle("/v1/namespaces/{namespace}/deployments/{name}/replicas",
+	router.Handle("/api/v1/namespaces/{namespace}/deployments/{name}/replicas",
 		&deploymentHandler{clientset: clientset, lister: deploymentLister})
-	router.Handle("/v1/deployments", &deploymentsHandler{lister: deploymentLister})
-	router.Handle("/v1/healthz", &healthzHandler{clientset: clientset, informer: deploymentInformer})
-	router.Handle("/v1/pingz", &pingzHandler{})
+	router.Handle("/api/v1/deployments", &deploymentsHandler{lister: deploymentLister})
+	router.Handle("/api/v1/healthz", &healthzHandler{clientset: clientset, informer: deploymentInformer})
+	router.Handle("/api/v1/pingz", &pingzHandler{})
 
-	return http.ListenAndServe(":"+port, router)
+	// Create HTTP Server with TLS Config
+	server := &http.Server{
+		Addr:      ":" + port,
+		TLSConfig: tlsConfig,
+		Handler:   router,
+	}
+	log.Printf("Starting HTTPS server on port %s...", port)
+
+	return server.ListenAndServeTLS("", "") // Certificates are in the TLSConfig
 }
 
 // deploymentHandler is an HTTP handler for the deployment API.
