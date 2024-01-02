@@ -292,16 +292,11 @@ type healthzHandler struct {
 }
 
 // Return healthy status
-// represents a healthy message
-type HealthyStatus struct {
+// represents a status message
+type HealthzStatus struct {
 	Status     string `json:"status"`
-	Kubernetes string `json:"kubernetes"`
-}
-
-// represents an unhealthy message
-type UnhealthyStatus struct {
-	Status string `json:"status"`
-	Error  string `json:"error"`
+	Error      string `json:"error,omitempty"`
+	Kubernetes string `json:"kubernetes,omitempty"`
 }
 
 // ServeHTTP implements http.Handler
@@ -309,18 +304,18 @@ func (h *healthzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.informer.HasSynced() {
 		_, err := h.clientset.AppsV1().Deployments("").List(r.Context(), metav1.ListOptions{Limit: 1})
 		if err != nil {
-			status := UnhealthyStatus{
+			status := HealthzStatus{
 				Status: "unhealthy",
 				Error:  "unable to connect to the cluster: " + err.Error(),
 			}
 			writeMessage(w, http.StatusServiceUnavailable, status)
 			return
 		}
-		status := HealthyStatus{Status: "healthy", Kubernetes: "connected"}
+		status := HealthzStatus{Status: "healthy", Kubernetes: "connected"}
 		writeMessage(w, http.StatusOK, status)
 	} else {
 		// Return unhealthy status
-		status := UnhealthyStatus{
+		status := HealthzStatus{
 			Status: "unhealthy",
 			Error:  "cluster informer is not synced yet"}
 		writeMessage(w, http.StatusServiceUnavailable, status)
