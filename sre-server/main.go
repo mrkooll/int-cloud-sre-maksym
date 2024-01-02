@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	listersv1 "k8s.io/client-go/listers/apps/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -43,6 +44,15 @@ func main() {
 	}
 }
 
+// return in cluster or file config
+func getConfig(inCluster bool, kubeconfig string) (*rest.Config, error) {
+	if inCluster {
+		return rest.InClusterConfig()
+	} else {
+		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+}
+
 func run(args []string) error {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
@@ -52,6 +62,7 @@ func run(args []string) error {
 	var port, kubeconfig string
 	var cert, key, cacert string
 	flag.StringVar(&port, "port", "8080", "server port")
+	inCluster := flag.Bool("incluster", false, "service is run inside cluster")
 	flag.StringVar(&kubeconfig, "kubeconfig", filepath.Join(homedir, ".kube", "config"), "path to the kubeconfig file")
 	flag.StringVar(&cert, "cert", "/etc/certs/sre-server.crt", "certificate file")
 	flag.StringVar(&key, "key", "/etc/certs/sre-server.key", "certificate key file")
@@ -81,7 +92,7 @@ func run(args []string) error {
 	}
 
 	// use the current context in kubeconfig
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	config, err := getConfig(*inCluster, kubeconfig)
 	if err != nil {
 		return err
 	}
