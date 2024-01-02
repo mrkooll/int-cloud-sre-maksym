@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -126,7 +129,7 @@ func run(args []string) error {
 	router := mux.NewRouter()
 	// add handlers
 	router.Handle("/api/v1/namespaces/{namespace}/deployments/{name}/replicas",
-		&deploymentHandler{clientset: clientset, lister: deploymentLister})
+		&deploymentHandler{clientset: clientset, informer: deploymentInformer, lister: deploymentLister})
 	router.Handle("/api/v1/deployments", &deploymentsHandler{lister: deploymentLister})
 	router.Handle("/api/v1/healthz", &healthzHandler{clientset: clientset, informer: deploymentInformer})
 	router.Handle("/api/v1/pingz", &pingzHandler{})
@@ -137,21 +140,41 @@ func run(args []string) error {
 		TLSConfig: tlsConfig,
 		Handler:   router,
 	}
-	log.Printf("Starting HTTPS server on port %s...", port)
 
-	return server.ListenAndServeTLS("", "") // Certificates are in the TLSConfig
+	// make channel for OS signals
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+	// run https server in the goroutine
+	go func() {
+		log.Printf("Starting HTTPS server on port %s...", port)
+		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Error starting server: %s", err)
+		}
+	}()
+	// block execution until receive signal
+	<-stopChan
+	log.Println("Shutting down server...")
+
+	// Initialize shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return server.Shutdown(ctx)
 }
 
 // deploymentHandler is an HTTP handler for the deployment API.
 type deploymentHandler struct {
 	clientset *kubernetes.Clientset
+	informer  cache.SharedIndexInformer
 	lister    listersv1.DeploymentLister
 }
 
 func writeMessage(w http.ResponseWriter, statusCode int, data any) {
-	d, _ := json.Marshal(data)
+	d, err := json.Marshal(data)
+	if err != nil {
+		log.Panicf("Unable to marshal data %v", err)
+	}
 	w.WriteHeader(statusCode)
-	_, err := w.Write(d)
+	_, err = w.Write(d)
 	if err != nil {
 		log.Printf("unable to write response: %v", err)
 	}
@@ -199,16 +222,18 @@ func (h *deploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// get replica count
 		// var spec ReplicaCountSpec
 		spec := ReplicaCountSpec{ReplicaCount: -1}
-		err := json.NewDecoder(r.Body).Decode(&spec)
+		r.Body = http.MaxBytesReader(w, r.Body, 150) // limit request reading size
 		defer r.Body.Close()
+		err := json.NewDecoder(r.Body).Decode(&spec)
 
 		if err != nil {
-			// bad data type in json or data that doesn't math the spec
-			errTxt := "unable to decode request body"
-			if err != nil {
-				errTxt += errTxt + " " + err.Error()
+			if err == io.EOF {
+				writeError(w, http.StatusBadRequest, "Empty request body")
+			} else if err == http.ErrHandlerTimeout {
+				writeError(w, http.StatusRequestTimeout, "Request body too large")
+			} else {
+				writeError(w, http.StatusBadRequest, "Unable to decode request body: "+err.Error())
 			}
-			writeError(w, http.StatusBadRequest, errTxt)
 			return
 		}
 
@@ -217,26 +242,36 @@ func (h *deploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// fetch the deployment
 		deploymentClient := h.clientset.AppsV1().Deployments(namespace)
-
-		deployment, err := deploymentClient.Get(r.Context(), name, metav1.GetOptions{})
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "error while fetching deployment: "+err.Error())
-			return
+		// try to update several times
+		maxRetries := 3
+		for retry := 0; retry < maxRetries; retry++ {
+			// fetch the deployment
+			deployment, err := h.lister.Deployments(namespace).Get(name)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "error while fetching deployment: "+err.Error())
+				return
+			}
+			// set replica count
+			deployment.Spec.Replicas = &spec.ReplicaCount
+			// update the deployment
+			_, err = deploymentClient.Update(r.Context(), deployment, metav1.UpdateOptions{})
+			if err != nil {
+				if k8sErrors.IsConflict(err) {
+					// version conflict - try again
+					continue
+				} else {
+					writeError(w, http.StatusInternalServerError, "Error while updating deployment: "+err.Error())
+					break
+				}
+			} else {
+				writeMessage(w, http.StatusOK, &Deployment{
+					Namespace:    deploymentSpec.Namespace,
+					Name:         deploymentSpec.Name,
+					ReplicaCount: spec.ReplicaCount})
+			}
 		}
-		// set replica count
-		deployment.Spec.Replicas = &spec.ReplicaCount
-		// update the deployment
-		_, err = deploymentClient.Update(r.Context(), deployment, metav1.UpdateOptions{})
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Error while updating deployment: "+err.Error())
-		}
-		writeMessage(w, http.StatusOK, &Deployment{
-			Namespace:    deploymentSpec.Namespace,
-			Name:         deploymentSpec.Name,
-			ReplicaCount: spec.ReplicaCount})
-
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Unable to set replicaCount for deployment %s during %d attempts", name, maxRetries))
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	}
@@ -289,7 +324,7 @@ type UnhealthyStatus struct {
 // ServeHTTP implements http.Handler
 func (h *healthzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.informer.HasSynced() {
-		_, err := h.clientset.CoreV1().Pods("").List(r.Context(), metav1.ListOptions{Limit: 1})
+		_, err := h.clientset.AppsV1().Deployments("").List(r.Context(), metav1.ListOptions{Limit: 1})
 		if err != nil {
 			status := UnhealthyStatus{
 				Status: "unhealthy",
