@@ -20,6 +20,7 @@ import (
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	listersv1 "k8s.io/client-go/listers/apps/v1"
@@ -243,35 +244,17 @@ func (h *deploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		deploymentClient := h.clientset.AppsV1().Deployments(namespace)
-		// try to update several times
-		maxRetries := 3
-		for retry := 0; retry < maxRetries; retry++ {
-			// fetch the deployment
-			deployment, err := h.lister.Deployments(namespace).Get(name)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, "error while fetching deployment: "+err.Error())
-				return
-			}
-			// set replica count
-			deployment.Spec.Replicas = &spec.ReplicaCount
-			// update the deployment
-			_, err = deploymentClient.Update(r.Context(), deployment, metav1.UpdateOptions{})
-			if err != nil {
-				if k8sErrors.IsConflict(err) {
-					// version conflict - try again
-					continue
-				} else {
-					writeError(w, http.StatusInternalServerError, "Error while updating deployment: "+err.Error())
-					break
-				}
-			} else {
-				writeMessage(w, http.StatusOK, &Deployment{
-					Namespace:    deploymentSpec.Namespace,
-					Name:         deploymentSpec.Name,
-					ReplicaCount: spec.ReplicaCount})
-			}
+		// creating patch for the deployment
+		patch := []byte(fmt.Sprintf(`{"spec":{"replicas":%d}}`, spec.ReplicaCount))
+		// apply patch
+		_, err = deploymentClient.Patch(r.Context(), name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Error while patching deployment: "+err.Error())
 		}
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Unable to set replicaCount for deployment %s during %d attempts", name, maxRetries))
+		writeMessage(w, http.StatusOK, &Deployment{
+			Namespace:    deploymentSpec.Namespace,
+			Name:         deploymentSpec.Name,
+			ReplicaCount: spec.ReplicaCount})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	}
