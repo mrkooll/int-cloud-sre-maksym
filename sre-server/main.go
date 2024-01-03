@@ -193,7 +193,7 @@ func (h *deploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	name := vars["name"]
 
 	// check is deployment exist
-	deploymentSpec, err := h.lister.Deployments(namespace).Get(name)
+	deployment, err := h.lister.Deployments(namespace).Get(name)
 
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
@@ -208,9 +208,9 @@ func (h *deploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		// Handle GET request
 		writeMessage(w, http.StatusOK, &Deployment{
-			Namespace:    deploymentSpec.Namespace,
-			Name:         deploymentSpec.Name,
-			ReplicaCount: deploymentSpec.Status.Replicas})
+			Namespace:    deployment.Namespace,
+			Name:         deployment.Name,
+			ReplicaCount: deployment.Status.Replicas})
 		return
 
 	case "PUT":
@@ -252,8 +252,8 @@ func (h *deploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "Error while patching deployment: "+err.Error())
 		}
 		writeMessage(w, http.StatusOK, &Deployment{
-			Namespace:    deploymentSpec.Namespace,
-			Name:         deploymentSpec.Name,
+			Namespace:    deployment.Namespace,
+			Name:         deployment.Name,
 			ReplicaCount: spec.ReplicaCount})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
