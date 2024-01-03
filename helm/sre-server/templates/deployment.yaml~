@@ -1,0 +1,38 @@
+# -*- mode: k8s -*-
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sre-server-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sre-server
+  template:
+    metadata:
+      labels:
+        app: sre-server
+    spec:
+      serviceAccountName: sre-server-manager  # Specify the ServiceAccount
+      containers:
+      - name: sre-server
+        image: mrkooll-sre-server:testing
+        ports:
+        - containerPort: 8443
+        env:
+        - name: PORT
+          value: "8443"
+        - name: CA
+          value: "/etc/ssl/certs/ca-cert.pem"
+        - name: CERT
+          value: "/etc/ssl/certs/server-cert.pem"
+        - name: KEY
+          value: "/etc/ssl/certs/server-key.pem"
+        volumeMounts:
+        - name: ssl-certs
+          mountPath: /etc/ssl/certs
+          readOnly: true
+      volumes:
+      - name: ssl-certs
+        secret:
+          secretName: sre-tls-secrets

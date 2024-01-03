@@ -29,6 +29,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+const (
+	InformerRefresh      = 5   // Informer refresh period in minutes
+	RequestBodyLimitSize = 150 // Request Body processing size limit in bytes
+)
+
 // represents a Kubernetes deployment
 type Deployment struct {
 	Namespace    string `json:"namespace"`
@@ -109,7 +114,7 @@ func run(args []string) error {
 
 	// Create a shared informer factory
 	// TODO add defaultResync to the configuration
-	sharedInformers := informers.NewSharedInformerFactory(clientset, time.Minute*5)
+	sharedInformers := informers.NewSharedInformerFactory(clientset, time.Minute*InformerRefresh)
 
 	// Create a deployment informer for all namespaces
 	deploymentInformer := sharedInformers.Apps().V1().Deployments().Informer()
@@ -223,7 +228,7 @@ func (h *deploymentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// get replica count
 		// var spec ReplicaCountSpec
 		spec := ReplicaCountSpec{ReplicaCount: -1}
-		r.Body = http.MaxBytesReader(w, r.Body, 150) // limit request reading size
+		r.Body = http.MaxBytesReader(w, r.Body, RequestBodyLimitSize) // limit request reading size
 		defer r.Body.Close()
 		err := json.NewDecoder(r.Body).Decode(&spec)
 

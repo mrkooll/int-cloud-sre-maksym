@@ -1,0 +1,38 @@
+# -*- mode: k8s -*-
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.appName }}-deployment
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.appName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appName }}
+    spec:
+      serviceAccountName: {{ .Values.appName }}-manager  # Specify the ServiceAccount
+      containers:
+      - name: {{ .Values.appName }}
+        image: {{ .Values.container.image }}
+        ports:
+        - containerPort: {{ .Values.container.port }}
+        env:
+        - name: PORT
+          value: {{ .Values.container.port | quote }}
+        - name: CA
+          value: "/etc/ssl/certs/ca-cert.pem"
+        - name: CERT
+          value: "/etc/ssl/certs/server-cert.pem"
+        - name: KEY
+          value: "/etc/ssl/certs/server-key.pem"
+        volumeMounts:
+        - name: ssl-certs
+          mountPath: /etc/ssl/certs
+          readOnly: true
+      volumes:
+      - name: ssl-certs
+        secret:
+          secretName: sre-tls-secrets
