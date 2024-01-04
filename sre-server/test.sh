@@ -6,11 +6,15 @@ PORT=8443
 
 CURL="curl -v --cert ${WD}/client.crt --key ${WD}/client.key --cacert ${WD}/ca.crt -H \"Content-Type: application/json\""
 
+EXIT_CODE=0
+
 PASSED () {
     echo -e "\033[1m\033[42mPASSED\033[0m"
 }
 FAILED () {
     echo -e "\033[1m\033[41mFAILED\033[0m"
+    EXIT_CODE=1
+    export EXIT_CODE
 }
 
 
@@ -51,3 +55,5 @@ if [ $? -eq 0 ] ; then PASSED; else FAILED; fi
 echo -n 'Set replicaCount backto 1...'
 ${CURL} -X PUT https://${HOST}:${PORT}/api/v1/namespaces/default/deployments/sre-server-deployment/replicas -d '{"replicaCount": 1}' 2>&1 | grep -q '"name":"sre-server-deployment","replicaCount":1'
 if [ $? -eq 0 ] ; then PASSED; else FAILED; fi
+
+exit ${EXIT_CODE}
