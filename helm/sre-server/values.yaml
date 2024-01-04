@@ -1,0 +1,18 @@
+# Default values for sre-server.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+appName: sre-server
+
+replicaCount: 1
+
+namespace: default
+
+service:
+  type: NodePort
+  port: 8443
+  nodePort: 32443
+
+container:
+  port: 8443
+  image: mrkooll-sre-server:testing
